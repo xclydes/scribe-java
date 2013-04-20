@@ -1,5 +1,7 @@
 package org.scribe.model;
 
+import java.io.ByteArrayOutputStream;
+
 import org.scribe.utils.OAuthEncoder;
 
 /**
@@ -27,6 +29,16 @@ public class Parameter implements Comparable<Parameter>
 	return value;
   }
 
+  public byte[] getValueBytes() {
+	 byte[] bytes;
+	 if( this.getValue() != null ) {
+		 bytes = this.getValue().getBytes();
+	 } else {
+		 bytes = new byte[0];
+	 }
+	 return bytes;
+  }
+  
   public String getKey() {
 	return key;
   }
@@ -66,17 +78,24 @@ public String asUrlEncodedPair()
    * @return The string encoded using the multi part format.
    */
   public String asMultiPartEncodedString() {
-	final StringBuilder strBldr = new StringBuilder();
-	strBldr.append(String.format("Content-Disposition: %1$s; ",
-			this.getDisposition()));
-	strBldr.append(String.format("name=\"%1$s\"; ", this.getKey()));
-	strBldr.append(SEQUENCE_NEW_LINE);
-	strBldr.append(SEQUENCE_NEW_LINE);
-	strBldr.append(this.getValue());
-	strBldr.append(SEQUENCE_NEW_LINE);
-	return strBldr.toString();
+	return new String(this.asMultiPartEncodedBytes());
   }
 
+  public byte[] asMultiPartEncodedBytes() {
+	  final ByteArrayOutputStream strBldr = new ByteArrayOutputStream();
+	  try {
+		  strBldr.write(String.format("Content-Disposition: %1$s; ",
+				  this.getDisposition()).getBytes());
+		  strBldr.write(String.format("name=\"%1$s\"; ", this.getKey()).getBytes());
+		  strBldr.write(SEQUENCE_NEW_LINE.getBytes());
+		  strBldr.write(SEQUENCE_NEW_LINE.getBytes());
+		  strBldr.write(this.getValueBytes());
+		  strBldr.write(SEQUENCE_NEW_LINE.getBytes());
+		
+	  } catch (Throwable error) { }
+	  return strBldr.toByteArray();
+  }
+  
   /**
    * Indicates whether or not this parameter is to be included in
    * the base string which is generated.

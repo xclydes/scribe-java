@@ -30,26 +30,31 @@ public class FileParameter extends Parameter {
 	 */
 	@Override
 	public String getValue() {
-		String value = "";
+		return new String( this.getValueBytes() );
+	}
+
+	/* (non-Javadoc)
+	 * @see org.scribe.model.Parameter#getValueBytes()
+	 */
+	@Override
+	public byte[] getValueBytes() {
+		final ByteArrayOutputStream bout = new ByteArrayOutputStream();
 		try {
 			//Ensure a valid file is specified.
 			if( this.srcFile != null 
-					&& this.srcFile.exists() ) {			
+				&& this.srcFile.exists() ) {			
 				FileInputStream fInStr = null;
 				try {
 					// Load the file to a stream
 					fInStr = new FileInputStream(srcFile);
 					//Creat a byte buffer the size of the file
 					byte readBuf[] = new byte[(int) fInStr.getChannel().size()];
-					ByteArrayOutputStream bout = new ByteArrayOutputStream();
 					int readCnt = fInStr.read(readBuf);
 					while (0 < readCnt) {
 						bout.write(readBuf, 0, readCnt);
 						readCnt = fInStr.read(readBuf);
 					}
 					fInStr.close();
-					byte[] byteArray = bout.toByteArray();
-					value = new String(byteArray);
 					bout.close();
 				} catch (Throwable error) {
 				} finally {
@@ -61,9 +66,14 @@ public class FileParameter extends Parameter {
 				}
 			}
 		} catch (Exception e) { }
-		return value;
+		final byte[] byteArray = bout.toByteArray();
+		//Clean up
+		try {
+			bout.close();
+		} catch (Throwable error) {	}
+		return byteArray;
 	}
-
+	
 	/**
 	 * Gets the name which should be sent as the filenam
 	 * in the request.
@@ -101,22 +111,30 @@ public class FileParameter extends Parameter {
 	public boolean isUsedInBaseString() {
 		return false;
 	}
+	
 	/**
 	 * Encodes this parameter in the multi part format.
 	 * @return The string encoded using the multi part
 	 * format.
 	 */
-	public String asMultiPartEncodedString() {
-		final StringBuilder strBldr = new StringBuilder();
-		strBldr.append( String.format("Content-Disposition: %1$s; ", this.getDisposition()));
-		strBldr.append( String.format("name=\"%1$s\"; ", OAuthEncoder.encode(this.getKey())));
-		strBldr.append( String.format("filename=\"%1$s\"", this.getFileName()));
-		strBldr.append( SEQUENCE_NEW_LINE );
-		strBldr.append( String.format("Content-Type: %1$s", this.getMimeType()) );
-		strBldr.append( SEQUENCE_NEW_LINE );
-		strBldr.append( SEQUENCE_NEW_LINE );
-		strBldr.append( this.getValue() );
-		strBldr.append( SEQUENCE_NEW_LINE );
-		return strBldr.toString();
+	public byte[] asMultiPartEncodedBytes() {
+		final ByteArrayOutputStream strBldr = new ByteArrayOutputStream();
+		try {
+			strBldr.write(String.format("Content-Disposition: %1$s; ",
+					this.getDisposition()).getBytes());
+			strBldr.write(String.format("name=\"%1$s\"; ",
+					OAuthEncoder.encode(this.getKey())).getBytes());
+			strBldr.write(String.format("filename=\"%1$s\"",
+					this.getFileName()).getBytes());
+			strBldr.write(SEQUENCE_NEW_LINE.getBytes());
+			strBldr.write(String.format("Content-Type: %1$s",
+					this.getMimeType()).getBytes());
+			strBldr.write(SEQUENCE_NEW_LINE.getBytes());
+			strBldr.write(SEQUENCE_NEW_LINE.getBytes());
+			strBldr.write(this.getValueBytes());
+			strBldr.write(SEQUENCE_NEW_LINE.getBytes());
+		} catch (Throwable error) {
+		}
+		return strBldr.toByteArray();
 	}
 }

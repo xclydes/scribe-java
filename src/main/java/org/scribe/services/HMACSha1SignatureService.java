@@ -1,13 +1,12 @@
 package org.scribe.services;
 
-import javax.crypto.*;
-import javax.crypto.spec.*;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
-import org.scribe.exceptions.*;
-import org.scribe.utils.*;
-
-// implementation of base64 encoding lives here.
-import javax.xml.bind.DatatypeConverter;
+import org.scribe.exceptions.OAuthSignatureException;
+import org.scribe.utils.Base64;
+import org.scribe.utils.OAuthEncoder;
+import org.scribe.utils.Preconditions;
 
 /**
  * HMAC-SHA1 implementation of {@SignatureService}
@@ -46,12 +45,7 @@ public class HMACSha1SignatureService implements SignatureService
     Mac mac = Mac.getInstance(HMAC_SHA1);
     mac.init(key);
     byte[] bytes = mac.doFinal(toSign.getBytes(UTF8));
-    return bytesToBase64String(bytes).replace(CARRIAGE_RETURN, EMPTY_STRING);
-  }
-
-  private String bytesToBase64String(byte[] bytes)
-  {
-    return DatatypeConverter.printBase64Binary(bytes);
+    return new String(Base64.encodeToByte(bytes, false), UTF8).replace(CARRIAGE_RETURN, EMPTY_STRING);
   }
 
   /**

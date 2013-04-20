@@ -1,5 +1,6 @@
 package org.scribe.model;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -18,7 +19,8 @@ public class ParameterList
   private static final String PARAM_SEPARATOR = "&";
   private static final String PAIR_SEPARATOR = "=";
   private static final String EMPTY_STRING = "";
-
+  private static final byte[] EMPTY_BYTES = new byte[0];
+  
   private static String boundary;
 
   private final List<Parameter> params;
@@ -110,7 +112,7 @@ public class ParameterList
    * @return
    */
   public String asMultiPartEncodedString() {
-	  if (params.size() == 0) {
+	  /*if (params.size() == 0) {
 		  return EMPTY_STRING;
 	  }	
 	  final String paramSep = new StringBuilder("--").append(getBoundary()).append(Parameter.SEQUENCE_NEW_LINE).toString();
@@ -128,9 +130,35 @@ public class ParameterList
 	  builder.append( getBoundary() );
 	  builder.append( "--" );
 	  builder.append(Parameter.SEQUENCE_NEW_LINE);
-	  return builder.toString();	
+	  return builder.toString();	*/
+	  return new String(this.asMultiPartEncodedBytes());
   }
 	
+  public byte[] asMultiPartEncodedBytes() {
+	  if (params.size() == 0) {
+		  return EMPTY_BYTES;
+	  }	
+	  final ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+	  try {
+		  final byte[] paramSep = new StringBuilder("--").append(getBoundary()).append(Parameter.SEQUENCE_NEW_LINE).toString().getBytes();
+//		  StringBuilder builder = new StringBuilder();
+		  bOut.write(paramSep);
+		  //Add the parameters
+		  for (Parameter p : params) {
+			  //Add the encoded string.
+			  bOut.write( p.asMultiPartEncodedBytes() );
+			  //Add the boundrary.
+			  bOut.write(paramSep);
+		  }
+		  bOut.write(Parameter.SEQUENCE_NEW_LINE.getBytes());
+		  bOut.write("--".getBytes());
+		  bOut.write( getBoundary().getBytes() );
+		  bOut.write( "--".getBytes() );
+		  bOut.write(Parameter.SEQUENCE_NEW_LINE.getBytes());		
+	} catch (Throwable error) { }
+	  return bOut.toByteArray();	
+  }
+
   /**
    * Gets the boundary to be used when building the body of the request.
    * 

@@ -1,10 +1,11 @@
 package org.scribe.services;
 
-import org.scribe.exceptions.*;
-import java.security.*;
+import java.security.PrivateKey;
+import java.security.Signature;
 
-// implementation of base64 encoding lives here.
-import javax.xml.bind.DatatypeConverter;
+import org.scribe.exceptions.OAuthSignatureException;
+import org.scribe.utils.Base64;
+
 
 /**
  * A signature service that uses the RSA-SHA1 algorithm.
@@ -32,17 +33,12 @@ public class RSASha1SignatureService implements SignatureService
       Signature signature = Signature.getInstance(RSA_SHA1);
       signature.initSign(privateKey);
       signature.update(baseString.getBytes(UTF8));
-      return bytesToBase64String(signature);
+      return new String(Base64.encodeToByte(signature.sign(), false), UTF8);
     }
     catch (Exception e)
     {
       throw new OAuthSignatureException(baseString, e);
     }
-  }
-
-  private String bytesToBase64String(Signature signature) throws SignatureException
-  {
-    return DatatypeConverter.printBase64Binary(signature.sign());
   }
 
   /**

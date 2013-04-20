@@ -318,7 +318,8 @@ public class Request
 	if(payload != null) {
 		body = payload;
 	} else if( this.getContentType().startsWith(CONTENT_TYPE_MULTIPART) ){//It is to use multipart encoding
-		body = bodyParams.asMultiPartEncodedString();
+		//Get the encoded bytes
+		return bodyParams.asMultiPartEncodedBytes();
 	}else {//It is to use URL encoding
 		body = bodyParams.asFormUrlEncodedString();
 	}
