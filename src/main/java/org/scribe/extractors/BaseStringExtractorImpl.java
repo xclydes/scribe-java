@@ -1,5 +1,9 @@
 package org.scribe.extractors;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
+import org.scribe.IParameter;
 import org.scribe.exceptions.*;
 import org.scribe.model.*;
 import org.scribe.utils.*;
@@ -33,7 +37,15 @@ public class BaseStringExtractorImpl implements BaseStringExtractor
     params.addAll(request.getQueryStringParams());
     params.addAll(request.getBodyParams());
     params.addAll(new ParameterList(request.getOauthParameters()));
-    return params.sort().asOauthBaseString();
+    ByteArrayOutputStream bOutStr = new ByteArrayOutputStream();
+    params.sort().writeTo(IParameter.ENCODING_OAUTHBASE, bOutStr);
+    final String baseStr = bOutStr.toString();
+    try {
+		bOutStr.close();
+	} catch (IOException e) {
+		e.printStackTrace();
+	}
+    return baseStr;
   }
 
   private void checkPreconditions(OAuthRequest request)

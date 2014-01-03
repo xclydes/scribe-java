@@ -1,12 +1,19 @@
 package org.scribe.model;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-import org.scribe.exceptions.*;
+import org.scribe.IParameter;
+import org.scribe.exceptions.OAuthConnectionException;
+import org.scribe.exceptions.OAuthException;
 
 /**
  * Represents an HTTP Request object
@@ -15,7 +22,6 @@ import org.scribe.exceptions.*;
  */
 public class Request
 {
-  private static final String CONTENT_LENGTH = "Content-Length";
   private static final String CONTENT_TYPE = "Content-Type";
   private static RequestTuner NOOP = new RequestTuner() {
     @Override public void tune(Request _){}
@@ -36,6 +42,7 @@ public class Request
   private Long connectTimeout = null;
   private Long readTimeout = null;
   private String contentType;
+  private int chunkLen;
   
   /**
    * Creates a new Http Request
@@ -50,8 +57,22 @@ public class Request
     this.querystringParams = new ParameterList();
     this.bodyParams = new ParameterList();
     this.headers = new HashMap<String, String>();
+    this.chunkLen = 0;
   }
 
+  public void setChunkLength(int chunkLen) {
+	  this.chunkLen = chunkLen;
+  }
+  
+  public int getChunkLength() {
+	  //If the chunk length is not set and it is recommended
+	  if( this.chunkLen <= 0 
+		  && this.bodyParams.isChunkingRecommended() ) {
+		  this.chunkLen = FileParameter.BUFFER_SIZE;
+	  }
+	  return this.chunkLen;
+  }
+  
   /**
    * Gets the content type which should be set on the connection.
    * 
@@ -142,7 +163,7 @@ public class Request
     addHeaders(connection);
     if (verb.equals(Verb.PUT) || verb.equals(Verb.POST))
     {
-      addBody(connection, getByteBodyContents());
+      addBody(connection);
     }
     tuner.tune(this);
     return new Response(connection);
@@ -154,17 +175,19 @@ public class Request
       conn.setRequestProperty(key, headers.get(key));
   }
 
-  void addBody(HttpURLConnection conn, byte[] content) throws IOException
+  void addBody(HttpURLConnection conn) throws IOException
   {
-    conn.setRequestProperty(CONTENT_LENGTH, String.valueOf(content.length));
-
     // Set default content type if none is set.
     if (conn.getRequestProperty(CONTENT_TYPE) == null)
     {
     	conn.setRequestProperty(CONTENT_TYPE, this.getContentType());
     }
     conn.setDoOutput(true);
-    conn.getOutputStream().write(content);
+    //If a chunk length is set
+    if( this.getChunkLength() > 0 ) {
+    	conn.setChunkedStreamingMode( this.getChunkLength() );
+    }
+    writeBodyContents(conn.getOutputStream());
   }
 
   /**
@@ -289,49 +312,29 @@ public class Request
     return url.replaceAll("\\?.*", "").replace("\\:\\d{4}", "");
   }
 
-  /**
-   * Returns the body of the request
-   * 
-   * @return form encoded string
-   * @throws OAuthException if the charset chosen is not supported
-   */
-  public String getBodyContents()
+  long  writeBodyContents(final OutputStream outStream)
   {
-    try
-    {
-      return new String(getByteBodyContents(),getCharset());
-    }
-    catch(UnsupportedEncodingException uee)
-    {
-      throw new OAuthException("Unsupported Charset: "+charset, uee);
-    }
-  }
-
-  byte[] getByteBodyContents()
-  {
-    if (bytePayload != null) {
-    	return bytePayload;
-    }
-    
-	final String body; 
-	//TODO Use a properly structured logic block
-	if(payload != null) {
-		body = payload;
-	} else if( this.getContentType().startsWith(CONTENT_TYPE_MULTIPART) ){//It is to use multipart encoding
-		//Get the encoded bytes
-		return bodyParams.asMultiPartEncodedBytes();
-	}else {//It is to use URL encoding
-		body = bodyParams.asFormUrlEncodedString();
+	long byteCount = 0;
+	try {
+		//If there is a byte payload
+	    if (bytePayload != null) {
+	    	outStream.write( bytePayload );
+	    	byteCount += bytePayload.length;
+	    } else if(payload != null) {//If there is a string payload
+	    	final byte[] plBytes = payload.getBytes();
+	    	outStream.write(plBytes);
+	    	byteCount += plBytes.length;
+	    } else {
+	    	int encoding = IParameter.ENCODING_URL;
+	    	if( this.getContentType().startsWith(CONTENT_TYPE_MULTIPART) ){//It is to use multipart encoding
+	    		encoding = IParameter.ENCODING_MULTIPART;
+	    	}
+	    	byteCount += bodyParams.writeTo(encoding, outStream);
+	    }
+	} catch (Throwable error) {
+		error.printStackTrace();
 	}
-	
-    try
-    {
-      return body.getBytes(getCharset());
-    }
-    catch(UnsupportedEncodingException uee)
-    {
-      throw new OAuthException("Unsupported Charset: "+getCharset(), uee);
-    }
+    return byteCount;
   }
 
   /**

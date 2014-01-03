@@ -14,7 +14,7 @@ import org.scribe.utils.*;
  */
 public class Response
 {
-  private static final String EMPTY = "";
+  //private static final String EMPTY = "";
 
   private int code;
   private String body;

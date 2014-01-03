@@ -3,11 +3,10 @@
  */
 package org.scribe.model;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-
-import org.scribe.utils.OAuthEncoder;
+import java.io.IOException;
+import java.io.OutputStream;
 
 /**
  * @author Jermaine
@@ -16,6 +15,7 @@ import org.scribe.utils.OAuthEncoder;
 public class FileParameter extends Parameter {
 
 	public static final String DEFAULT_MIME_TYPE = "application/octet-stream";
+	public static final int BUFFER_SIZE = 1024 * 1024 * 8;
 	
 	private String mimeType;
 	private final File srcFile;
@@ -30,15 +30,40 @@ public class FileParameter extends Parameter {
 	 */
 	@Override
 	public String getValue() {
-		return new String( this.getValueBytes() );
+		String fileURL = null;
+		try {
+			if( this.srcFile != null 
+				&& this.srcFile.exists() ) {
+				fileURL = this.srcFile.toURI().toString();
+			}
+		} catch (Throwable error) {}
+		return fileURL;
 	}
-
+	
 	/* (non-Javadoc)
-	 * @see org.scribe.model.Parameter#getValueBytes()
+	 * @see org.scribe.model.Parameter#writeAdditionAttributes(java.io.OutputStream)
 	 */
 	@Override
-	public byte[] getValueBytes() {
-		final ByteArrayOutputStream bout = new ByteArrayOutputStream();
+	protected long writeAdditionalProperties(OutputStream writeTo) throws IOException {
+		long byteCount = super.writeAdditionalProperties(writeTo);
+		final byte[] newLineBytes = SEQUENCE_NEW_LINE.getBytes();
+		final byte[] fileNameTag = String.format("filename=\"%1$s\"", this.getFileName()).getBytes();
+		final byte[] contentTypeTag = String.format("Content-Type: %1$s",this.getMimeType()).getBytes();
+		writeTo.write( fileNameTag );//Filename
+		byteCount += fileNameTag.length;
+		writeTo.write( newLineBytes );//New Line
+		byteCount += newLineBytes.length;
+		writeTo.write( contentTypeTag );//Mime/Content type
+		byteCount += contentTypeTag.length;
+		return byteCount;
+	}
+	
+	/* (non-Javadoc)
+	 * @see org.scribe.model.Parameter#writeValue(java.io.OutputStream)
+	 */
+	@Override
+	protected long writeValue(final OutputStream writeTo) throws IOException {
+		long byteCount = 0;
 		try {
 			//Ensure a valid file is specified.
 			if( this.srcFile != null 
@@ -47,16 +72,23 @@ public class FileParameter extends Parameter {
 				try {
 					// Load the file to a stream
 					fInStr = new FileInputStream(srcFile);
-					//Creat a byte buffer the size of the file
-					byte readBuf[] = new byte[(int) fInStr.getChannel().size()];
+					//Create a byte buffer the size of the file
+					byte[] readBuf = new byte[BUFFER_SIZE];
 					int readCnt = fInStr.read(readBuf);
 					while (0 < readCnt) {
-						bout.write(readBuf, 0, readCnt);
+						//Write to the output stream
+						writeTo.write(readBuf, 0, readCnt);
+						byteCount += readCnt;
+						System.out.println("Wrote file bytes: " + readCnt + ", Total: " + byteCount);
+						//Reset the buffer
+						readBuf = new byte[BUFFER_SIZE];
+						//Read from the file to the buffer
 						readCnt = fInStr.read(readBuf);
 					}
 					fInStr.close();
-					bout.close();
+					fInStr = null;
 				} catch (Throwable error) {
+					error.printStackTrace();
 				} finally {
 					if( fInStr != null ) {
 						try {
@@ -65,13 +97,8 @@ public class FileParameter extends Parameter {
 					}
 				}
 			}
-		} catch (Exception e) { }
-		final byte[] byteArray = bout.toByteArray();
-		//Clean up
-		try {
-			bout.close();
-		} catch (Throwable error) {	}
-		return byteArray;
+		} catch (Throwable e) { }
+		return byteCount;
 	}
 	
 	/**
@@ -110,31 +137,5 @@ public class FileParameter extends Parameter {
 	@Override
 	public boolean isUsedInBaseString() {
 		return false;
-	}
-	
-	/**
-	 * Encodes this parameter in the multi part format.
-	 * @return The string encoded using the multi part
-	 * format.
-	 */
-	public byte[] asMultiPartEncodedBytes() {
-		final ByteArrayOutputStream strBldr = new ByteArrayOutputStream();
-		try {
-			strBldr.write(String.format("Content-Disposition: %1$s; ",
-					this.getDisposition()).getBytes());
-			strBldr.write(String.format("name=\"%1$s\"; ",
-					OAuthEncoder.encode(this.getKey())).getBytes());
-			strBldr.write(String.format("filename=\"%1$s\"",
-					this.getFileName()).getBytes());
-			strBldr.write(SEQUENCE_NEW_LINE.getBytes());
-			strBldr.write(String.format("Content-Type: %1$s",
-					this.getMimeType()).getBytes());
-			strBldr.write(SEQUENCE_NEW_LINE.getBytes());
-			strBldr.write(SEQUENCE_NEW_LINE.getBytes());
-			strBldr.write(this.getValueBytes());
-			strBldr.write(SEQUENCE_NEW_LINE.getBytes());
-		} catch (Throwable error) {
-		}
-		return strBldr.toByteArray();
 	}
 }
